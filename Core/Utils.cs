@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -49,6 +51,21 @@ namespace gestion.site.Core
                 }
             }
             return true;
+        }
+
+        public static void EnviarCorreo(string destinatario,  string asunto, string mensaje, bool html)
+        {
+            SmtpClient cliente=new SmtpClient("smtp.gmail.com", 587)
+            {
+                EnableSsl = true,
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                UseDefaultCredentials = false,
+                Credentials = new NetworkCredential("umg.proyecto.final@gmail.com", "75315900")
+            };
+
+            MailMessage email = new MailMessage("umg.proyecto.final@gmail.com", destinatario, asunto, mensaje);
+            email.IsBodyHtml = html;
+            cliente.Send(email);
         }
     }
 }

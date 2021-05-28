@@ -13,24 +13,23 @@ using System.Threading.Tasks;
 namespace gestion.site.Controllers.Maestros
 {
     [Authorize()]
-    [Route("api/maestros/[controller]")]
+    [Route("api/gestiones/[controller]")]
     [ApiController]
     [ResponseCache(CacheProfileName = "Never")]
-    public class TareaController : ControllerBase
+    public class AsignacionTareaController : ControllerBase
     {
         private readonly GestionContext _db;
 
-        public TareaController(GestionContext db)
+        public AsignacionTareaController(GestionContext db)
         {
             _db = db;
         }
 
-        [HttpGet()]
+        [HttpGet("sin-asignar")]
         public async Task<dynamic> Get()
         {
-
-
             var ret = await (from x in _db.tarea
+                             where x.estado.estado_desc== "Registrada"
                              select new
                              {
                                  x.tarea_id,
@@ -43,16 +42,12 @@ namespace gestion.site.Controllers.Maestros
             return ret;
         }
 
-        [HttpGet("mis-tareas")]
+        [HttpGet("en-proceso")]
         public async Task<dynamic> GetPropias()
         {
-            var Id = User.FindFirstValue(ClaimTypes.PrimarySid);
-            if (Id == null)
-            {
-                return NotFound();
-            }
+
             var ret = await (from x in _db.tarea
-                             where x.creador_id.ToString() == Id
+                             where x.estado.estado_desc== "Asignada" || x.estado.estado_desc == "En Proceso"
                              select new
                              {
                                  x.tarea_id,
@@ -104,24 +99,43 @@ namespace gestion.site.Controllers.Maestros
         }
 
         [HttpPost()]
-        public async Task<dynamic> Post(tarea model)
+        public async Task<dynamic> Post(tarea_especialista model)
         {
-            model.fecha_solicitud = DateTime.UtcNow;
-            var Id = User.FindFirstValue(ClaimTypes.PrimarySid);
-            if (Id == null)
+
+            var MAX_CARGA = (await _db.configuracion.FindAsync("CARGA-MAX")).valor_numerico;
+
+            var cant = (from x in _db.tarea_especialista
+                        where x.especialista_id == model.especialista_id
+                        && (x.tarea.estado.estado_desc != "Solucionada" && x.tarea.estado.estado_desc != "Anulada")
+                        select x.tarea_id
+                        ).Count();
+
+            if (cant >= MAX_CARGA)
             {
-                return NotFound();
+                return NotFound("Se llevo a la carga maxima de trabajo " + MAX_CARGA.ToString());
             }
-            model.creador_id = int.Parse(Id);
+            var tarea = await _db.tarea.Include("estado").FirstAsync(x=> x.tarea_id== model.tarea_id);
+            var estado = await _db.estado.FirstAsync(y => y.estado_desc== "Asignada");
+            if (tarea.estado.estado_desc == "Registrada")
+            {
+                tarea.estado_id = estado.estado_id;
+            }
             await _db.AddAsync(model);
+            
             await _db.SaveChangesAsync();
-            var solicitante = await _db.solicitante.FindAsync(model.solicitante_id);
+            var solicitante = await _db.solicitante.FindAsync(tarea.solicitante_id);
+            var especialista = await _db.especialista.FindAsync(model.especialista_id);
             Utils.EnviarCorreo(solicitante.correo,
-                "Tarea Creada",
-                $"<h2>Se ha creado la Tarea # {model.tarea_id} </h2>" +
-                $"Descripcion: {model.tarea_desc} <br/>",             
+                "Tarea Asignada",
+                $"<h2>Se ha asignado el especialista {especialista.especialista_desc} a  la Tarea # {model.tarea_id} </h2>" ,
                 true);
+            Utils.EnviarCorreo(especialista.correo,
+                "Tarea Asignada",
+                $"<h2>Se ha asignado la Tarea # {model.tarea_id} </h2>",
+                true);
+
             return Ok();
+
         }
     }
 }
