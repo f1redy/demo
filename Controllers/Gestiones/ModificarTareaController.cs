@@ -164,7 +164,7 @@ namespace gestion.site.Controllers.Maestros
           
             Utils.EnviarCorreo(solicitante.correo,
                 "Actualizacion de Tarea",
-                $"<h2>Se actualizado la Tarea # {tarea}, al estado {e.estado_desc} </h2>",
+                $"<h2>Se actualizado la Tarea # {id}, al estado {e.estado_desc} </h2>",
                 true);
             return Ok();
         }
